@@ -1,0 +1,33 @@
+4 Brainstorm
+1 Chain Lightning
+4 Daze
+4 Delver of Secrets
+4 Dragon's Rage Channeler
+4 Flooded Strand
+4 Force of Will
+1 Island
+4 Lightning Bolt
+3 Mercurial Spelldancer
+1 Minor Misstep
+4 Mishra's Bauble
+3 Murktide Regent
+1 Mystic Sanctuary
+4 Ponder
+1 Preordain
+4 Scalding Tarn
+1 Steam Vents
+4 Volcanic Island
+4 Wasteland
+
+1 Echoing Truth
+1 End the Festivities
+2 Flusterstorm
+1 Grafdigger's Cage
+1 Hurkyl's Recall
+1 Hydroblast
+1 Maddening Hex
+1 Meltdown
+2 Pyroblast
+1 Red Elemental Blast
+1 Submerge
+2 Surgical Extraction

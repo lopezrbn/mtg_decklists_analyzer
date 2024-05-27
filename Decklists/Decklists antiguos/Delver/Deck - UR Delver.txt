@@ -1,0 +1,33 @@
+1 Arid Mesa
+4 Brainstorm
+1 Brazen Borrower
+4 Daze
+4 Delver of Secrets
+4 Dragon's Rage Channeler
+1 Faerie Mastermind
+1 Fire/Ice
+3 Flooded Strand
+4 Force of Will
+2 Lightning Bolt
+3 Mishra's Bauble
+3 Murktide Regent
+4 Ponder
+4 Scalding Tarn
+2 Snow-Covered Island
+1 Spell Pierce
+4 Stifle
+2 Third Path Iconoclast
+4 Volcanic Island
+4 Wasteland
+
+2 Counterbalance
+1 Dress Down
+1 Flusterstorm
+1 Force of Negation
+1 Maddening Hex
+2 Meltdown
+1 Narset, Parter of Veils
+2 Pyroblast
+1 Red Elemental Blast
+2 Surgical Extraction
+1 True-Name Nemesis

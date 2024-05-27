@@ -1,0 +1,35 @@
+1 Badlands
+4 Brainstorm
+1 Brazen Borrower
+4 Daze
+4 Dragon's Rage Channeler
+1 Force of Negation
+4 Force of Will
+4 Lightning Bolt
+2 Lorien Revealed
+2 Mishra's Bauble
+3 Murktide Regent
+2 Oliphaunt
+3 Orcish Bowmasters
+3 Polluted Delta
+4 Ponder
+2 Reanimate
+2 Sauron's Ransom
+3 Scalding Tarn
+1 Spell Pierce
+3 Underground Sea
+1 Unholy Heat
+3 Volcanic Island
+3 Wasteland
+
+1 Cast into the Fire
+2 Fury
+1 Grafdigger's Cage
+1 Hydroblast
+2 Meltdown
+1 Mystic Sanctuary
+1 Null Rod
+2 Pyroblast
+1 Red Elemental Blast
+1 Submerge
+2 Surgical Extraction
