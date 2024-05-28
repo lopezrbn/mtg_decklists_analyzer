@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 import re
 
 
-base_path = r"J:\Mi unidad\1 - Data Science\Proyectos personales\Decklist analysis\Decklists"
+base_path = r"J:\Mi unidad\1 - Data Science\Proyectos personales\mtg_decklists_analyzer\Decklists"
 
 
 def download_decklists(deck_name, n_pages):
@@ -159,17 +159,30 @@ def analyze_dls_cards(df, types=False):
     df_analyzed = (
         group["qty"].agg(["count", "sum",
                         lambda x: x.mean().round(0),
-                        "mean", "std", "min",
-                        lambda x: x.quantile(0.25),
-                        lambda x: x.quantile(0.50),
-                        lambda x: x.quantile(0.75),
-                        "max"])
+                        "mean", "std", "min", "max",
+                        lambda x: (x==0).sum() / x.count(),
+                        lambda x: (x==1).sum() / x.count(),
+                        lambda x: (x==2).sum() / x.count(),
+                        lambda x: (x==3).sum() / x.count(),
+                        lambda x: (x==4).sum() / x.count(),
+                        lambda x: (x==5).sum() / x.count(),
+                        lambda x: (x==6).sum() / x.count(),
+                        lambda x: (x==7).sum() / x.count(),
+                        lambda x: (x==8).sum() / x.count(),
+                        lambda x: (x==9).sum() / x.count()])
                     .rename(columns={
-                        'count': 'n_decklists',
+                        'count': 'n_dls',
                         '<lambda_0>': 'mean_rnd',
-                        '<lambda_1>': '25%',
-                        '<lambda_2>': '50%',
-                        '<lambda_3>': '75%'})
+                        '<lambda_1>': '% 0 copies',
+                        '<lambda_2>': '% 1 copy',
+                        '<lambda_3>': '% 2 copies',
+                        '<lambda_4>': '% 3 copies',
+                        '<lambda_5>': '% 4 copies',
+                        '<lambda_6>': '% 5 copies',
+                        '<lambda_7>': '% 6 copies',
+                        '<lambda_8>': '% 7 copies',
+                        '<lambda_9>': '% 8 copies',
+                        '<lambda_10>': '% 9 copies'})
                     .sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
                                  ascending=[True, True, True, False, True] if types else [True, False, True])
                     .reset_index()
@@ -195,7 +208,7 @@ def analyze_dls_types(df, subtypes=False):
                           lambda x: np.sqrt((((x - (x.sum() / n_decks))**2).sum())/n_decks),
                     ])
                     .rename(columns={
-                          '<lambda_0>': 'n_decklists',
+                          '<lambda_0>': 'n_dls',
                           '<lambda_1>': 'sum',
                           '<lambda_2>': 'mean_rnd',
                           '<lambda_3>': 'mean',
