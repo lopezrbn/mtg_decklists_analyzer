@@ -53,6 +53,7 @@ def download_decklists(deck_name, format, n_pages):
     print("\r\tDone!\n")
 
 
+
 def read_decklists(deck_name, format):
     format = format.lower()
     path = os.path.join(base_path, format, deck_name)
@@ -64,6 +65,7 @@ def read_decklists(deck_name, format):
             df = pd.concat([df, pd.read_csv(file_path, header=None, skip_blank_lines=False, sep="*")], axis=1)
     df.columns = list(range(len(df.columns)))
     return df
+
 
 
 def process_decklists(df, format):
@@ -85,8 +87,7 @@ def process_decklists(df, format):
         with open(cards_db_json_path, "w") as file:
             json.dump(cards_database, file)
         return cards_database
-    
-    
+        
     def _read_cards_db(name_values:pd.Series, cards_db_excel_path="cards_database.xlsx", cards_db_json_path="cards_database.json"):
         cards_db_excel = pd.read_excel(cards_db_excel_path)
         cards_database = _read_n_update_cards_db(name_values, cards_db_json_path)
@@ -103,6 +104,15 @@ def process_decklists(df, format):
         with open(cards_db_json_path, "w") as file:
             json.dump(cards_database, file)
         return cards_database
+    
+    # Define a function that joins all the 'color' strings in a group, removes 'C', and sorts the characters
+    def _join_colors(group):
+        colors = ''.join(group['color'].fillna('').astype(str))
+        # Remove 'C'
+        colors = colors.replace('C', '')
+        # Sort in the order 'WUBRG' and remove duplicates
+        colors = ''.join(sorted(set(c for c in colors if c in "WUBRG"), key="WUBRG".index))
+        return colors
 
 
     # Change df to long format and add columns for sb, qty and name
@@ -152,7 +162,6 @@ def process_decklists(df, format):
     df = pd.concat([df_main, df_sideboard])
 
     #### Include card type
-
     # Read, update and populate cards database
     cards_database = _read_cards_db(name_values=df["name"],
                                     cards_db_excel_path="cards_database.xlsx",
@@ -162,17 +171,31 @@ def process_decklists(df, format):
     df["subtype"] = df["name"].map(cards_database[format]).str["subtype"]
     df["color"] = df["name"].map(cards_database[format]).str["color"]
 
+    #### Create a column with the colors of the deck
+    # Filter the DataFrame to only include rows where 'qty' > 0
+    df_filtered = df[(df['qty'] > 0) & (df['type'] != "Land")]
+    # Create a DataFrame with the colors of each deck
+    deck_colors = df_filtered.groupby('#dl').apply(_join_colors).reset_index()
+    deck_colors.columns = ['#dl', 'deck_colors']
+    # Merge df with deck_colors
+    df = df.merge(deck_colors, on='#dl', how='left')
+    # Reorder the characters in 'deck_colors' to be in the order 'WUBRG'
+    df['deck_colors'] = df['deck_colors'].apply(lambda x: ''.join(sorted(x, key="WUBRG".index)))
+    # Reset the index
+    df.reset_index(inplace=True, drop=True)
+
     # Reorder columns
-    df = df[["#dl", "sb", "type", "subtype", "color", "qty", "name"]]
+    df = df[["#dl", "deck_colors", "sb", "type", "subtype", "color", "qty", "name"]]
     # Sort by decklist number and sb
-    df = df.sort_values(by=["#dl", "sb", "type", "subtype", "qty", "color", "name"], ascending=[True, True, True, True, False, True, True])
+    df = df.sort_values(by=["deck_colors", "#dl", "sb", "type", "subtype", "qty", "color", "name"], ascending=[True, True, True, True, True, False, True, True])
     # Reset index
     df = df.reset_index(drop=True)
 
     return df
 
 
-def analyze_dls_cards(df, types=False):
+
+def analyze_dls_cards(df_orig, types=False):
 
     def _calculate_final_qty_cards(x, n_decks):
         probabilities = [
@@ -200,49 +223,58 @@ def analyze_dls_cards(df, types=False):
                 adj_qty = df[df.sb==sb]["final_qty"].sum()
         return df
 
+    dfs_analyzed = []
 
-    if types:
-        group = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
-    else:
-        group = df.groupby(by=["sb", "name"], observed=True)
+    for deck_colors in df_orig["deck_colors"].unique():
+        df = df_orig[df_orig["deck_colors"]==deck_colors]
 
-    df_analyzed = (
-        group["qty"].agg(["count", "sum",
-                        lambda x: x.mean().round(0).astype(int),
-                        "mean", "std", "min", "max",
-                        lambda x: (x==((x.mean().round(0))-2)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))-1)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))+0)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))+1)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))+2)).sum() / x.count(),
-                        lambda x: _calculate_final_qty_cards(x, x.count()),
-                    ])
-                    .rename(columns={
-                        'count': 'n_dls',
-                        '<lambda_0>': 'mean_rnd',
-                        '<lambda_1>': '% copies = mean-2',
-                        '<lambda_2>': '% copies = mean-1',
-                        '<lambda_3>': '% copies = mean',
-                        '<lambda_4>': '% copies = mean+1',
-                        '<lambda_5>': '% copies = mean+2',
-                        '<lambda_6>': 'final_qty',
-                    })
-                    .sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
-                                 ascending=[True, True, True, False, True] if types else [True, False, True])
-                    .reset_index()
-    )
+        if types:
+            group = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
+        else:
+            group = df.groupby(by=["sb", "name"], observed=True)
 
-    df_analyzed["diff"] = df_analyzed["final_qty"] - df_analyzed["mean"]
+        df_analyzed = (
+            group["qty"].agg(["count", "sum",
+                            lambda x: x.mean().round(0).astype(int),
+                            "mean", "std", "min", "max",
+                            lambda x: (x==((x.mean().round(0))-2)).sum() / x.count(),
+                            lambda x: (x==((x.mean().round(0))-1)).sum() / x.count(),
+                            lambda x: (x==((x.mean().round(0))+0)).sum() / x.count(),
+                            lambda x: (x==((x.mean().round(0))+1)).sum() / x.count(),
+                            lambda x: (x==((x.mean().round(0))+2)).sum() / x.count(),
+                            lambda x: _calculate_final_qty_cards(x, x.count()),
+                        ])
+                        .rename(columns={
+                            'count': 'n_dls',
+                            '<lambda_0>': 'mean_rnd',
+                            '<lambda_1>': '% copies = mean-2',
+                            '<lambda_2>': '% copies = mean-1',
+                            '<lambda_3>': '% copies = mean',
+                            '<lambda_4>': '% copies = mean+1',
+                            '<lambda_5>': '% copies = mean+2',
+                            '<lambda_6>': 'final_qty',
+                        })
+                        .sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
+                                    ascending=[True, True, True, False, True] if types else [True, False, True])
+                        .reset_index()
+        )
 
-    df_analyzed = _adjust_final_qty(df_analyzed)
+        df_analyzed["deck_colors"] = deck_colors
+        df_analyzed["diff"] = df_analyzed["final_qty"] - df_analyzed["mean"]
 
-    cols_ordered = df_analyzed.columns.to_list()
-    cols_ordered.remove("name")
-    cols_ordered.remove("final_qty")
-    cols_ordered = cols_ordered[:1] + ["final_qty", "name"] + cols_ordered[1:]
-    df_analyzed = df_analyzed[cols_ordered]
+        df_analyzed = _adjust_final_qty(df_analyzed)
 
-    return df_analyzed
+        cols_ordered = df_analyzed.columns.to_list()
+        cols_ordered.remove("name")
+        cols_ordered.remove("final_qty")
+        cols_ordered.remove("deck_colors")
+        cols_ordered = ["deck_colors"] + cols_ordered[:1] + ["final_qty", "name"] + cols_ordered[1:]
+        df_analyzed = df_analyzed[cols_ordered]
+
+        dfs_analyzed.append(df_analyzed)
+
+    return dfs_analyzed
+
 
 
 def analyze_dls_types(df, subtypes=False):
