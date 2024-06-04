@@ -215,208 +215,209 @@ def process_decklists(df, format):
     return dfs
 
 
-def analyze_dls_cards(df, types=False):
+def analyze_dls(df, types=False):
 
-    def _calculate_final_qty_cards(x, n_decks):
-        probabilities = [
-            (x==((x.mean().round(0))-2)).sum() / n_decks,
-            (x==((x.mean().round(0))-1)).sum() / n_decks,
-            (x==((x.mean().round(0))+0)).sum() / n_decks,
-            (x==((x.mean().round(0))+1)).sum() / n_decks,
-            (x==((x.mean().round(0))+2)).sum() / n_decks,
-        ]
-        mean_diff = probabilities.index(max(probabilities)) - 2
-        return x.mean().round(0) + mean_diff
+    def _analyze_dls_types(df, subtypes=False):
+        
+        def _calculate_final_qty_types(x, n_decks):
+            probabilities = [
+                (x==((x.sum()/n_decks)).round(0)-2).sum() / n_decks,
+                (x==((x.sum()/n_decks)).round(0)-1).sum() / n_decks,
+                (x==((x.sum()/n_decks)).round(0)+0).sum() / n_decks,
+                (x==((x.sum()/n_decks)).round(0)+1).sum() / n_decks,
+                (x==((x.sum()/n_decks)).round(0)+2).sum() / n_decks,
+            ]
+            mean_diff = probabilities.index(max(probabilities)) - 2
+            return (x.sum()/n_decks).round(0) + mean_diff
 
-    
-    def _adjust_final_qty(df_orig):
-        dfs = []
-        for sb in range(2):
-            df = df_orig[df_orig["sb"]==sb].sort_values(by=["%_mode_2nd"], ascending=False)
-            indices = df["%_mode_2nd"].index
-            adj_qty = df["final_qty"].sum()
-            target = 60 if sb == 0 else 15
-            while adj_qty != target:
-                if adj_qty > target:
-                    for index in indices:
-                        if df.loc[index, "mode_2nd"] < df.loc[index, "final_qty"]:
-                            df.loc[index, "final_qty"] = df.loc[index, "mode_2nd"]
-                            adj_qty = df["final_qty"].sum()
-                            break
-                else:
-                    for index in indices:
-                        if df.loc[index, "mode_2nd"] > df.loc[index, "final_qty"]:
-                            df.loc[index, "final_qty"] = df.loc[index, "mode_2nd"]
-                            adj_qty = df["final_qty"].sum()
-                            break
-            dfs.append(df)
-        df = pd.concat(dfs)
-        return df
+        if subtypes:
+            group1 = df.groupby(by=["sb", "type", "subtype"], observed=True)
+        else:
+            group1 = df.groupby(by=["sb", "type"], observed=True)
+        
+        n_decks = df["#dl"].nunique()
 
+        df1 = (
+            group1["qty"].agg([lambda x: n_decks,
+                            lambda x: int(x.sum()),
+                            lambda x: (x.sum() / n_decks).round(0),
+                            lambda x: x.sum() / n_decks,
+                        ])
+                        .rename(columns={
+                            '<lambda_0>': 'n_dls',
+                            '<lambda_1>': 'sum',
+                            '<lambda_2>': 'mean_rnd',
+                            '<lambda_3>': 'mean',
+                        })
+        )
 
-    if types:
-        group1 = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
-    else:
-        group1 = df.groupby(by=["sb", "name"], observed=True)
+        if subtypes:
+            group2 = df.groupby(by=["#dl", "sb", "type", "subtype"], observed=True)["qty"].sum()
+            group3 = group2.groupby(by=["sb", "type", "subtype"], observed=True)
+        else:
+            group2 = df.groupby(by=["#dl", "sb", "type"], observed=True)["qty"].sum()
+            group3 = group2.groupby(by=["sb", "type"], observed=True)
 
-    df1 = (
-        group1["qty"].agg(["count", "sum",
-                        lambda x: x.mean().round(0).astype(int),
-                        "mean", "std",
-                        lambda x: x.value_counts().index[0] if len(x.value_counts()) > 0 else np.nan,
-                        lambda x: (x==(x.value_counts().index[0] if len(x.value_counts()) > 0 else np.nan)).sum() / df["#dl"].nunique(),
-                        lambda x: x.value_counts().index[1] if len(x.value_counts()) > 1 else np.nan,
-                        lambda x: (x==(x.value_counts().index[1] if len(x.value_counts()) > 1 else np.nan)).sum() / df["#dl"].nunique(),
-                        lambda x: x.value_counts().index[2] if len(x.value_counts()) > 2 else np.nan,
-                        lambda x: (x==(x.value_counts().index[2] if len(x.value_counts()) > 2 else np.nan)).sum() / df["#dl"].nunique(),
-                        lambda x: x.value_counts().index[3] if len(x.value_counts()) > 3 else np.nan,
-                        lambda x: (x==(x.value_counts().index[3] if len(x.value_counts()) > 3 else np.nan)).sum() / df["#dl"].nunique(),
-                        lambda x: x.value_counts().index[4] if len(x.value_counts()) > 4 else np.nan,
-                        lambda x: (x==(x.value_counts().index[4] if len(x.value_counts()) > 4 else np.nan)).sum() / df["#dl"].nunique(),
-                        "min", "max",
-                        lambda x: (x==((x.mean().round(0))-2)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))-1)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))+0)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))+1)).sum() / x.count(),
-                        lambda x: (x==((x.mean().round(0))+2)).sum() / x.count(),
-                        lambda x: _calculate_final_qty_cards(x, x.count()),
-                    ])
+        df2 = (group3.agg(["min", "max",
+                        lambda x: (x==((x.sum()/n_decks)).round(0)-2).sum() / n_decks,
+                        lambda x: (x==((x.sum()/n_decks)).round(0)-1).sum() / n_decks,
+                        lambda x: (x==((x.sum()/n_decks)).round(0)+0).sum() / n_decks,
+                        lambda x: (x==((x.sum()/n_decks)).round(0)+1).sum() / n_decks,
+                        lambda x: (x==((x.sum()/n_decks)).round(0)+2).sum() / n_decks,
+                        lambda x: _calculate_final_qty_types(x, n_decks),
+                        ])
                     .rename(columns={
-                        'count': 'n_dls',
-                        '<lambda_0>': 'mean_rnd',
-                        '<lambda_1>': 'mode_1st',
-                        '<lambda_2>': '%_mode_1st',
-                        '<lambda_3>': 'mode_2nd',
-                        '<lambda_4>': '%_mode_2nd',
-                        '<lambda_5>': 'mode_3rd',
-                        '<lambda_6>': '%_mode_3rd',
-                        '<lambda_7>': 'mode_4th',
-                        '<lambda_8>': '%_mode_4th',
-                        '<lambda_9>': 'mode_5th',
-                        '<lambda_10>': '%_mode_5th',
-                        '<lambda_11>': '% copies = mean-2',
-                        '<lambda_12>': '% copies = mean-1',
-                        '<lambda_13>': '% copies = mean',
-                        '<lambda_14>': '% copies = mean+1',
-                        '<lambda_15>': '% copies = mean+2',
-                        '<lambda_16>': 'final_qty',
+                        '<lambda_0>': "% copies = mean-2",
+                        '<lambda_1>': "% copies = mean-1",
+                        '<lambda_2>': "% copies = mean",
+                        '<lambda_3>': "% copies = mean+1",
+                        '<lambda_4>': "% copies = mean+2",
+                        '<lambda_5>': "final_qty",
                     })
-                    # .sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
-                    #             ascending=[True, True, True, False, True] if types else [True, False, True])
-                    .reset_index()
-    )
+        )
 
-    if types:
-        group2 = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
-    else:
-        group2 = df.groupby(by=["sb", "name"], observed=True)
-
-    df2 = (
-        group2.apply(lambda x: (x["qty"]>0).sum() / x["#dl"].nunique())
-            .reset_index()
-            .rename(columns={0: "%_dls_w_card"})
+        df3 = (
+            pd.concat([df1, df2], axis=1)
+            .sort_values(
+                by=["sb", "type", "subtype", "sum"] if subtypes else ["sb", "type", "sum"],
+                ascending=[True, True, True, False] if subtypes else [True, True, False]
             )
+            .reset_index()
+        )
 
-    df3 = df1.merge(df2, on=["sb", "type", "subtype", "name"] if types else ["sb", "name"], how="left")
-    df3 = df3.sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
-                            ascending=[True, True, True, False, True] if types else [True, False, True])
-    df3 = df3.reset_index(drop=True)
+        cols_ordered = df3.columns.to_list()
+        cols_ordered.remove("final_qty")
+        cols_ordered = cols_ordered[:1] + ["final_qty"] + cols_ordered[1:]
+        df3 = df3[cols_ordered]
 
-    df3["deck_colors"] = df["deck_colors"].unique()[0]
-    df3["diff"] = df3["final_qty"] - df3["mean"]
-
-    df3["final_qty"] = df3["mode_1st"]
-
-    df3 = _adjust_final_qty(df3)
-
-    cols_ordered = df3.columns.to_list()
-    cols_ordered.remove("name")
-    cols_ordered.remove("final_qty")
-    cols_ordered.remove("deck_colors")
-    cols_ordered.remove("%_dls_w_card")
-    cols_ordered = ["deck_colors"] + cols_ordered[:1] + ["final_qty", "name"] +cols_ordered[1:8] + ["%_dls_w_card"] + cols_ordered[8:]
-    # cols_ordered = ["deck_colors"] + cols_ordered[:1] + ["final_qty", "name"] + cols_ordered[1:]
-    df3 = df3[cols_ordered]
-    df3 = df3.sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
-                            ascending=[True, True, True, False, True] if types else [True, False, True])
-
-    return df3
+        return df3
 
 
 
-def analyze_dls_types(df, subtypes=False):
-    
-    def _calculate_final_qty_types(x, n_decks):
-        probabilities = [
-            (x==((x.sum()/n_decks)).round(0)-2).sum() / n_decks,
-            (x==((x.sum()/n_decks)).round(0)-1).sum() / n_decks,
-            (x==((x.sum()/n_decks)).round(0)+0).sum() / n_decks,
-            (x==((x.sum()/n_decks)).round(0)+1).sum() / n_decks,
-            (x==((x.sum()/n_decks)).round(0)+2).sum() / n_decks,
-        ]
-        mean_diff = probabilities.index(max(probabilities)) - 2
-        return (x.sum()/n_decks).round(0) + mean_diff
 
-    if subtypes:
-        group1 = df.groupby(by=["sb", "type", "subtype"], observed=True)
-    else:
-        group1 = df.groupby(by=["sb", "type"], observed=True)
-    
-    n_decks = df["#dl"].nunique()
+    def _analyze_dls_cards(df, types=False, types_list=None):
 
-    df1 = (
-        group1["qty"].agg([lambda x: n_decks,
-                          lambda x: int(x.sum()),
-                          lambda x: (x.sum() / n_decks).round(0),
-                          lambda x: x.sum() / n_decks,
-                          lambda x: np.sqrt((((x - (x.sum() / n_decks))**2).sum())/n_decks),
-                    ])
-                    .rename(columns={
-                          '<lambda_0>': 'n_dls',
-                          '<lambda_1>': 'sum',
-                          '<lambda_2>': 'mean_rnd',
-                          '<lambda_3>': 'mean',
-                          '<lambda_4>': 'std',
-                    })
-    )
+        def _calculate_final_qty_cards(x, n_decks):
+            probabilities = [
+                (x==((x.mean().round(0))-2)).sum() / n_decks,
+                (x==((x.mean().round(0))-1)).sum() / n_decks,
+                (x==((x.mean().round(0))+0)).sum() / n_decks,
+                (x==((x.mean().round(0))+1)).sum() / n_decks,
+                (x==((x.mean().round(0))+2)).sum() / n_decks,
+            ]
+            mean_diff = probabilities.index(max(probabilities)) - 2
+            return x.mean().round(0) + mean_diff
 
-    if subtypes:
-        group2 = df.groupby(by=["#dl", "sb", "type", "subtype"], observed=True)["qty"].sum()
-        group3 = group2.groupby(by=["sb", "type", "subtype"], observed=True)
-    else:
-        group2 = df.groupby(by=["#dl", "sb", "type"], observed=True)["qty"].sum()
-        group3 = group2.groupby(by=["sb", "type"], observed=True)
+        
+        def _adjust_final_qty(df_orig, types_list):
+            dfs = []
+            for sb, type, qty in types_list:
+                df = df_orig[(df_orig["sb"]==sb) & (df_orig["type"]==type)].sort_values(by=["%_mode_2nd"], ascending=False)
+                indices = df["%_mode_2nd"].index
+                adj_qty = df["final_qty"].sum()
+                target = qty
+                while adj_qty != target:
+                    if adj_qty > target:
+                        for index in indices:
+                            if df.loc[index, "mode_2nd"] < df.loc[index, "final_qty"]:
+                                df.loc[index, "final_qty"] = df.loc[index, "mode_2nd"]
+                                adj_qty = df["final_qty"].sum()
+                                break
+                    else:
+                        for index in indices:
+                            if df.loc[index, "mode_2nd"] > df.loc[index, "final_qty"]:
+                                df.loc[index, "final_qty"] = df.loc[index, "mode_2nd"]
+                                adj_qty = df["final_qty"].sum()
+                                break
+                dfs.append(df)
+            df = pd.concat(dfs)
+            return df
 
-    df2 = (group3.agg(["min", "max",
-                      lambda x: (x==((x.sum()/n_decks)).round(0)-2).sum() / n_decks,
-                      lambda x: (x==((x.sum()/n_decks)).round(0)-1).sum() / n_decks,
-                      lambda x: (x==((x.sum()/n_decks)).round(0)+0).sum() / n_decks,
-                      lambda x: (x==((x.sum()/n_decks)).round(0)+1).sum() / n_decks,
-                      lambda x: (x==((x.sum()/n_decks)).round(0)+2).sum() / n_decks,
-                      lambda x: _calculate_final_qty_types(x, n_decks),
-                    ])
-                .rename(columns={
-                    '<lambda_0>': "% copies = mean-2",
-                    '<lambda_1>': "% copies = mean-1",
-                    '<lambda_2>': "% copies = mean",
-                    '<lambda_3>': "% copies = mean+1",
-                    '<lambda_4>': "% copies = mean+2",
-                    '<lambda_5>': "final_qty",
-                })
-    )
 
-    df3 = (
-        pd.concat([df1, df2], axis=1)
-          .sort_values(
-              by=["sb", "type", "subtype", "sum"] if subtypes else ["sb", "type", "sum"],
-              ascending=[True, True, True, False] if subtypes else [True, True, False]
-          )
-          .reset_index()
-    )
+        if types:
+            group1 = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
+        else:
+            group1 = df.groupby(by=["sb", "name"], observed=True)
 
-    cols_ordered = df3.columns.to_list()
-    cols_ordered.remove("final_qty")
-    cols_ordered = cols_ordered[:1] + ["final_qty"] + cols_ordered[1:]
-    df3 = df3[cols_ordered]
+        df1 = (
+            group1["qty"].agg(["count", "sum",
+                            lambda x: x.mean().round(0).astype(int),
+                            "mean", "std",
+                            lambda x: x.value_counts().index[0] if len(x.value_counts()) > 0 else np.nan,
+                            lambda x: (x==(x.value_counts().index[0] if len(x.value_counts()) > 0 else np.nan)).sum() / df["#dl"].nunique(),
+                            lambda x: x.value_counts().index[1] if len(x.value_counts()) > 1 else np.nan,
+                            lambda x: (x==(x.value_counts().index[1] if len(x.value_counts()) > 1 else np.nan)).sum() / df["#dl"].nunique(),
+                            lambda x: x.value_counts().index[2] if len(x.value_counts()) > 2 else np.nan,
+                            lambda x: (x==(x.value_counts().index[2] if len(x.value_counts()) > 2 else np.nan)).sum() / df["#dl"].nunique(),
+                            lambda x: x.value_counts().index[3] if len(x.value_counts()) > 3 else np.nan,
+                            lambda x: (x==(x.value_counts().index[3] if len(x.value_counts()) > 3 else np.nan)).sum() / df["#dl"].nunique(),
+                            lambda x: x.value_counts().index[4] if len(x.value_counts()) > 4 else np.nan,
+                            lambda x: (x==(x.value_counts().index[4] if len(x.value_counts()) > 4 else np.nan)).sum() / df["#dl"].nunique(),
+                            "min", "max",
+                            lambda x: _calculate_final_qty_cards(x, x.count()),
+                        ])
+                        .rename(columns={
+                            'count': 'n_dls',
+                            '<lambda_0>': 'mean_rnd',
+                            '<lambda_1>': 'mode_1st',
+                            '<lambda_2>': '%_mode_1st',
+                            '<lambda_3>': 'mode_2nd',
+                            '<lambda_4>': '%_mode_2nd',
+                            '<lambda_5>': 'mode_3rd',
+                            '<lambda_6>': '%_mode_3rd',
+                            '<lambda_7>': 'mode_4th',
+                            '<lambda_8>': '%_mode_4th',
+                            '<lambda_9>': 'mode_5th',
+                            '<lambda_10>': '%_mode_5th',
+                            '<lambda_11>': 'final_qty',
+                        })
+                        # .sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
+                        #             ascending=[True, True, True, False, True] if types else [True, False, True])
+                        .reset_index()
+        )
 
-    return df3
+        if types:
+            group2 = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
+        else:
+            group2 = df.groupby(by=["sb", "name"], observed=True)
+
+        df2 = (
+            group2.apply(lambda x: (x["qty"]>0).sum() / x["#dl"].nunique())
+                .reset_index()
+                .rename(columns={0: "%_dls_w_card"})
+                )
+
+        df3 = df1.merge(df2, on=["sb", "type", "subtype", "name"] if types else ["sb", "name"], how="left")
+        df3 = df3.sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
+                                ascending=[True, True, True, False, True] if types else [True, False, True])
+        df3 = df3.reset_index(drop=True)
+
+        df3["deck_colors"] = df["deck_colors"].unique()[0]
+        df3["diff"] = df3["final_qty"] - df3["mean"]
+
+        df3["final_qty"] = df3["mode_1st"]
+
+        df3 = _adjust_final_qty(df3, types_list)
+
+        cols_ordered = df3.columns.to_list()
+        cols_ordered.remove("name")
+        cols_ordered.remove("final_qty")
+        cols_ordered.remove("deck_colors")
+        cols_ordered.remove("%_dls_w_card")
+        cols_ordered = ["deck_colors"] + cols_ordered[:1] + ["final_qty", "name"] +cols_ordered[1:8] + ["%_dls_w_card"] + cols_ordered[8:]
+        # cols_ordered = ["deck_colors"] + cols_ordered[:1] + ["final_qty", "name"] + cols_ordered[1:]
+        df3 = df3[cols_ordered]
+        df3 = df3.sort_values(by=["sb", "type", "subtype", "sum", "name"] if types else ["sb", "sum", "name"],
+                                ascending=[True, True, True, False, True] if types else [True, False, True])
+
+        return df3
+
+
+    df_types = _analyze_dls_types(df, subtypes=False)
+    sb_results, types_results, types_qty_results = df_types["sb"], df_types["type"], df_types["final_qty"]
+    types_results_list = list(zip(sb_results, types_results, types_qty_results))
+    df_cards = _analyze_dls_cards(df, types=True, types_list=types_results_list)
+
+    return df_types, df_cards
+
+
