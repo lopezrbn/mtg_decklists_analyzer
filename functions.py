@@ -316,7 +316,9 @@ def analyze_dls(df, types=False):
                 indices = df["%_mode_2nd"].index
                 adj_qty = df["final_qty"].sum()
                 target = qty
-                while adj_qty != target:
+                iterations = 0
+                while (adj_qty != target) & (iterations < 1000):
+                    iterations += 1
                     if adj_qty > target:
                         for index in indices:
                             if df.loc[index, "mode_2nd"] < df.loc[index, "final_qty"]:
