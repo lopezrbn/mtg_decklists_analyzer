@@ -7,13 +7,14 @@ from bs4 import BeautifulSoup
 import re
 
 
-# base_path = r"J:\Mi unidad\1 - Data Science\Proyectos personales\mtg_decklists_analyzer\Decklists"
-# base_path = r"Decklists"
-base_path = os.path.join("0_data", "Decklists")
+base_path = os.path.join("0_data", "decklists")
 
 
 def download_decklists(deck_name, format, n_pages):
     
+    deck_name = deck_name.lower().replace(" ", "_")
+    format = format.lower().replace(" ", "_")
+
     ### Download ids of decklists for a given deck archetype and the number of pages
     print(f"Downloading ids of decklists for deck {deck_name}...")
     deck_name = deck_name.replace(" ", "%20")
@@ -56,7 +57,8 @@ def download_decklists(deck_name, format, n_pages):
 
 
 def read_decklists(deck_name, format):
-    format = format.lower()
+    format = format.lower().replace(" ", "_")
+    deck_name = deck_name.lower().replace(" ", "_")
     path = os.path.join(base_path, format, deck_name)
     df = pd.DataFrame()
     for file in os.listdir(path):
@@ -70,7 +72,9 @@ def read_decklists(deck_name, format):
 
 
 def process_decklists(df, format):
-       
+    
+    format = format.lower().replace(" ", "_")
+
     def _read_cards_db(name_values:pd.Series,
                        cards_db_excel_path=os.path.join("0_data", "cards_database.xlsx"),
                        cards_db_json_path=os.path.join("0_data", "cards_database.json")):
