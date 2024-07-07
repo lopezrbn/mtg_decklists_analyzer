@@ -5,6 +5,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 import re
+import pdb
 
 
 base_path = os.path.join("0_data", "decklists")
@@ -12,12 +13,10 @@ base_path = os.path.join("0_data", "decklists")
 
 def download_decklists(deck_name, format, n_pages):
     
-    deck_name = deck_name.lower().replace(" ", "_")
-    format = format.lower().replace(" ", "_")
-
     ### Download ids of decklists for a given deck archetype and the number of pages
     print(f"Downloading ids of decklists for deck {deck_name}...")
-    deck_name = deck_name.replace(" ", "%20")
+    deck_name = deck_name.lower().replace(" ", "%20")
+    format = format.lower().replace(" ", "_")
     base_url = f"https://www.tcdecks.net/archetype.php?format=Premodern&archetype={deck_name}&page="
     decks_ids = []
     for page in range(1, n_pages+1):
@@ -42,6 +41,7 @@ def download_decklists(deck_name, format, n_pages):
     print("\r\tDone!\n")
 
     ### Save decklists to txt files
+    deck_name = deck_name.replace("%20", "_")
     full_path = os.path.join(base_path, format, deck_name.replace("%20", " "))
     os.makedirs(full_path, exist_ok=True)
     print(f"Saving decklists to '{full_path}'...")
@@ -61,7 +61,9 @@ def read_decklists(deck_name, format):
     deck_name = deck_name.lower().replace(" ", "_")
     path = os.path.join(base_path, format, deck_name)
     df = pd.DataFrame()
-    for file in os.listdir(path):
+    files = os.listdir(path)
+    files.sort()
+    for file in files:
         # Check whether file is in text format or not
         if file.endswith(".txt"):
             file_path = os.path.join(path, file)
@@ -238,6 +240,48 @@ def analyze_dls(df, types=False):
             mean_diff = probabilities.index(max(probabilities)) - 2
             return (x.sum()/n_decks).round(0) + mean_diff
 
+
+        def _adjust_final_qty_types(df):
+            dfs = []
+            for sb, target in zip([0,1], [60,15]):
+                df_sb = df[df["sb"]==sb]
+                adj_qty = df_sb["final_qty"].sum()
+                iterations = 0
+                while (adj_qty != target) & (iterations < 100):
+                    iterations += 1
+                    for index in df_sb.index:
+                        if adj_qty > target:
+                            if df_sb.loc[index, "mean_rnd"] < df_sb.loc[index, "final_qty"]:
+                                df_sb.loc[index, "final_qty"] = df_sb.loc[index, "mean_rnd"]
+                                adj_qty = df_sb["final_qty"].sum()
+                                break
+                        else:
+                            if df_sb.loc[index, "mean_rnd"] > df_sb.loc[index, "final_qty"]:
+                                df_sb.loc[index, "final_qty"] = df_sb.loc[index, "mean_rnd"]
+                                adj_qty = df_sb["final_qty"].sum()
+                                break
+
+                if adj_qty != target:
+                    if adj_qty > target:
+                        df_sb = df_sb.sort_values(by=["diff"], ascending=True)
+                        for index in df_sb.index:
+                            df_sb.loc[index, "final_qty"] -= 1
+                            adj_qty = df_sb["final_qty"].sum()
+                            if adj_qty == target:
+                                break
+                    else:
+                        df_sb = df_sb.sort_values(by=["diff"], ascending=False)
+                        for index in df_sb.index:
+                            df_sb.loc[index, "final_qty"] += 1
+                            adj_qty = df_sb["final_qty"].sum()
+                            if adj_qty == target:
+                                break
+
+                dfs.append(df_sb)
+            df = pd.concat(dfs)
+            return df["final_qty"]
+
+
         if subtypes:
             group1 = df.groupby(by=["sb", "type", "subtype"], observed=True)
         else:
@@ -258,6 +302,8 @@ def analyze_dls(df, types=False):
                             '<lambda_3>': 'mean',
                         })
         )
+
+        df1["diff"] = df1["mean"] - df1["mean_rnd"]
 
         if subtypes:
             group2 = df.groupby(by=["#dl", "sb", "type", "subtype"], observed=True)["qty"].sum()
@@ -284,6 +330,7 @@ def analyze_dls(df, types=False):
                     })
         )
 
+        
         df3 = (
             pd.concat([df1, df2], axis=1)
             .sort_values(
@@ -292,6 +339,8 @@ def analyze_dls(df, types=False):
             )
             .reset_index()
         )
+
+        df3["final_qty"] = _adjust_final_qty_types(df3)
 
         cols_ordered = df3.columns.to_list()
         cols_ordered.remove("final_qty")
@@ -325,7 +374,7 @@ def analyze_dls(df, types=False):
                 adj_qty = df["final_qty"].sum()
                 target = qty
                 iterations = 0
-                while (adj_qty != target) & (iterations < 1000):
+                while (adj_qty != target) & (iterations < 100):
                     iterations += 1
                     if adj_qty > target:
                         for index in indices:
@@ -339,6 +388,23 @@ def analyze_dls(df, types=False):
                                 df.loc[index, "final_qty"] = df.loc[index, "mode_2nd"]
                                 adj_qty = df["final_qty"].sum()
                                 break
+
+                if adj_qty != target:
+                    if adj_qty > target:
+                        df = df.sort_values(by=["diff"], ascending=True)
+                        for index in df.index:
+                            df.loc[index, "final_qty"] -= 1
+                            adj_qty = df["final_qty"].sum()
+                            if adj_qty == target:
+                                break
+                    else:
+                        df = df.sort_values(by=["diff"], ascending=False)
+                        for index in df.index:
+                            df.loc[index, "final_qty"] += 1
+                            adj_qty = df["final_qty"].sum()
+                            if adj_qty == target:
+                                break
+
                 dfs.append(df)
             df = pd.concat(dfs)
             return df
@@ -386,6 +452,8 @@ def analyze_dls(df, types=False):
                         .reset_index()
         )
 
+        df1["diff"] = df1["mean"] - df1["mean_rnd"]
+
         if types:
             group2 = df.groupby(by=["sb", "type", "subtype", "name"], observed=True)
         else:
@@ -403,7 +471,7 @@ def analyze_dls(df, types=False):
         df3 = df3.reset_index(drop=True)
 
         df3["deck_colors"] = df["deck_colors"].unique()[0]
-        df3["diff"] = df3["final_qty"] - df3["mean"]
+        # df3["diff"] = df3["final_qty"] - df3["mean"]
 
         df3["final_qty"] = df3["mode_1st"]
 
